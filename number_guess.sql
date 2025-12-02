@@ -360,6 +360,13 @@ COPY public.games (game_id, user_id, guesses) FROM stdin;
 258	79	62
 259	79	113
 260	79	78
+261	81	206
+262	81	193
+263	82	782
+264	82	819
+265	81	889
+266	81	332
+267	81	933
 \.
 
 
@@ -448,6 +455,8 @@ COPY public.users (user_id, username) FROM stdin;
 78	user_1764662377894
 79	user_1764662624367
 80	user_1764662624366
+81	user_1764662879596
+82	user_1764662879595
 \.
 
 
@@ -455,14 +464,14 @@ COPY public.users (user_id, username) FROM stdin;
 -- Name: games_game_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.games_game_id_seq', 260, true);
+SELECT pg_catalog.setval('public.games_game_id_seq', 267, true);
 
 
 --
 -- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_user_id_seq', 80, true);
+SELECT pg_catalog.setval('public.users_user_id_seq', 82, true);
 
 
 --
