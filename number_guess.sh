@@ -1,57 +1,70 @@
 #!/bin/bash
-
 PSQL="psql --username=freecodecamp --dbname=number_guess -t --no-align -c"
 
-# Prompt for username
+# Prompt and normalize username
 echo "Enter your username:"
 read USERNAME
+USERNAME=${USERNAME:0:22}
 
-# Check if user exists
-USER_ID=$($PSQL "SELECT user_id FROM users WHERE username='$USERNAME'")
+# Fetch user stats (games_played, best_game); empty if new user
+USER_INFO=$($PSQL "SELECT games_played, best_game FROM users WHERE username='$USERNAME';")
 
-if [[ -z $USER_ID ]]
+# Branch: new vs returning user
+if [[ -z "$USER_INFO" ]]
 then
-  # New user
-  INSERT_USER=$($PSQL "INSERT INTO users(username) VALUES('$USERNAME')")
-  USER_ID=$($PSQL "SELECT user_id FROM users WHERE username='$USERNAME'")
   echo "Welcome, $USERNAME! It looks like this is your first time here."
+  $PSQL "INSERT INTO users(username, games_played, best_game) VALUES('$USERNAME', 0, NULL);" > /dev/null
 else
-  # Returning user
-  GAMES_PLAYED=$($PSQL "SELECT COUNT(*) FROM games WHERE user_id=$USER_ID")
-  BEST_GAME=$($PSQL "SELECT MIN(guesses) FROM games WHERE user_id=$USER_ID")
+  IFS="|" read GAMES_PLAYED BEST_GAME <<< "$USER_INFO"
   echo "Welcome back, $USERNAME! You have played $GAMES_PLAYED games, and your best game took $BEST_GAME guesses."
 fi
 
-# Start the game
-echo "Guess the secret number between 1 and 1000:"
-
-# Generate secret number
+# Secret number and game prompt
 SECRET_NUMBER=$(( RANDOM % 1000 + 1 ))
-NUMBER_OF_GUESSES=0
 
-while true
+echo "Guess the secret number between 1 and 1000:"
+read GUESS
+
+# Validate first input: require an integer
+while ! [[ $GUESS =~ ^[0-9]+$ ]]
 do
+  echo "That is not an integer, guess again:"
   read GUESS
-  # Validate integer input
-  if [[ ! $GUESS =~ ^[0-9]+$ ]]
-  then
-    echo "That is not an integer, guess again:"
-    continue
-  fi
-
-  NUMBER_OF_GUESSES=$(( NUMBER_OF_GUESSES + 1 ))
-
-  if [[ $GUESS -eq $SECRET_NUMBER ]]
-  then
-    echo "You guessed it in $NUMBER_OF_GUESSES tries. The secret number was $SECRET_NUMBER. Nice job!"
-    SAVE_GAME=$($PSQL "INSERT INTO games(user_id, guesses) VALUES($USER_ID, $NUMBER_OF_GUESSES)")
-    break
-  elif [[ $GUESS -gt $SECRET_NUMBER ]]
-  then
-    echo "It's lower than that, guess again:"
-  else
-    echo "It's higher than that, guess again:"
-  fi
 done
 
-echo Welcome to the Number Guessing Game
+NUMBER_OF_GUESSES=1
+
+# Main guessing loop with validation
+while [[ $GUESS -ne $SECRET_NUMBER ]]
+do
+  if [[ $GUESS -lt $SECRET_NUMBER ]]
+  then
+    echo "It's higher than that, guess again:"
+  else
+    echo "It's lower than that, guess again:"
+  fi
+
+  read GUESS
+
+  while ! [[ $GUESS =~ ^[0-9]+$ ]]
+  do
+    echo "That is not an integer, guess again:"
+    read GUESS
+  done
+
+  NUMBER_OF_GUESSES=$((NUMBER_OF_GUESSES+1))
+done
+
+# Success message (exact wording)
+echo "You guessed it in $NUMBER_OF_GUESSES tries. The secret number was $SECRET_NUMBER. Nice job!"
+
+# Persist stats: increment games_played and update best_game if better
+# (best_game stays NULL until the first win; then set to NUMBER_OF_GUESSES)
+$PSQL "UPDATE users
+       SET games_played = games_played + 1,
+           best_game = CASE
+             WHEN best_game IS NULL THEN $NUMBER_OF_GUESSES
+             WHEN $NUMBER_OF_GUESSES < best_game THEN $NUMBER_OF_GUESSES
+             ELSE best_game
+           END
+       WHERE username = '$USERNAME';" > /dev/null
